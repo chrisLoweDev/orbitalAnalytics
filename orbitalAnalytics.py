@@ -1,58 +1,114 @@
-from math import pi, sqrt, cos, acos
+from math import pi, sqrt, cos, acos, radians
 from typing import Union
 
 
 MU = 398600000000000
 TAU_S = 86400  # Synodic day length (seconds)
+TAU_E = 86164  # Siderial day length (seconds)
 TAU_ES = 365.25 * TAU_S  # Solar period (seconds)
-J2 = 0.0010826  # J2 perturbation
+J2 = 0.00108262668355  # J2 perturbation
 R_E = 6371000.8  # Earth radius, average (m)
 
 
-def sun_sync(
-		sma: Union[int, float] = None,
-		inc: Union[int, float] = None,
-		ecc: Union[int, float] = 0.
-) -> tuple:
-	"""
-	Retuns the semi-major axis and inclination for a Sun-synchronous orbit, given an
-	input of EITHER SMA or Inc, plus some orbit eccentricity.
+def orbit_period(sma):
+	return 2 * pi * sqrt(sma ** 3 / MU)
 
-	Note: passing both SMA and inc will result in an Attribute Error
+
+def nodal_regression(tau):
+	"""
+	Regression of the line of nodes (rads/orbit)
+	:param tau: orbit period (s)
+	:return:
+	"""
+	return 2 * pi * tau / TAU_ES
+
+
+def earth_regression(tau):
+	"""
+	Rotation of the Earth underneath the orbit plane (rads/orbit)
+	:param tau: orbit period (s)
+	:return:
+	"""
+	return -2 * pi * tau / TAU_E
+
+
+def nodal_regression_sidereal(sma, inc, ecc):
+	return (-3 * pi * J2 * R_E**2 * cos(inc)) / (sma**2 * ((1 - ecc ** 2) ** 2))
+
+
+def sun_sync_from_sma(
+		sma: Union[int, float] = R_E + 500000.,
+		ecc: Union[int, float] = 0.
+) -> float:
+	"""
+	Retuns the inclination for a Sun-synchronous orbit, given an input semi-major axis
+	and eccentricity.
 
 	:param sma: Semi-major axis (m)
-	:param inc: Inclination (radians)
 	:param ecc: Eccentricity
-	:return: Tuple containing the Semi-major axis (m) and Inclination (radians)
+	:return: Inclination (radians)
 	"""
-	if sma and inc:
-		raise AttributeError(
-			"Cannot specify both Semi-major axis and Inclination. Define one or the other"
+	if sma < R_E:
+		raise ValueError(
+			"Semi-major axis must be greater than the radius of the Earth"
 		)
 
-	if sma:
-		if sma < R_E:
-			raise ValueError(
-				"Semi-major axis must be greater than the radius of the Earth"
-			)
+	if sma * (1-ecc) - R_E < 100000:
+		p = (sma * (1-ecc) - R_E) / 1000
+		string = "Orbit perigee must be greater than 100km, currently is %2d km" % p
+		raise ValueError(string)
 
-		if sma * (1-ecc) - R_E < 100000:
-			p = (sma * (1-ecc) - R_E) / 1000
-			string = "Orbit perigee must be greater than 100km, currently is %2d km" % p
-			raise ValueError(string)
+	# Orbit period (s)
+	tau = orbit_period(sma)
 
-		# Orbit period (s)
-		tau = 2 * pi * sqrt(sma ** 3 / MU)
+	# Regression of the line of nodes (rad/orbit)
+	phi = nodal_regression(tau)
 
-		# Regression of the line of nodes (rad/orbit)
-		phi = 2 * pi * tau / TAU_ES
+	inc = acos(-phi * sma**2 * ((1 - ecc**2)**2) / (3 * pi * J2 * R_E**2))
 
-		inc = acos(-phi * sma**2 * ((1 - ecc**2)**2) / (3 * pi * J2 * R_E**2))
+	return inc
 
-	elif inc:
-		sma = (-3*sqrt(MU)*TAU_ES*J2*R_E**2*cos(inc)/(4*pi*((1-ecc**2)**2)))**(2/7)
 
-	else:
-		raise AttributeError("Must specify either semi-major axis OR inclination")
+def sun_sync_from_inc(
+		inc: Union[int, float] = radians(98.),
+		ecc: Union[int, float] = 0.
+) -> float:
+	"""
+	Retuns the semi-major axis (m) for a Sun-synchronous orbit, given an inclination and
+	eccentricity.
 
-	return sma, inc
+	:param inc: Inclination (radians)
+	:param ecc: Eccentricity
+	:return: Semi-major axis (m)
+	"""
+
+	sma = (-3*sqrt(MU)*TAU_ES*J2*R_E**2*cos(inc)/(4*pi*((1-ecc**2)**2)))**(2/7)
+
+	return sma
+
+
+def earth_sync_from_inc(
+		inc: Union[int, float] = radians(60.),
+		m: int = 1,
+		n: int = 16,
+		ecc: Union[int, float] = 0.
+) -> float:
+	"""
+	Return the Semi-major axis that results in a repeat ground track after an integer
+	number of orbits (n) and integer number of days (m)
+	:param inc:
+	:param m:
+	:param n:
+	:param ecc:
+	:return sma:
+	"""
+	phi = 1.
+	tol = 0.000001
+	while abs(phi + (m * 2 * pi / n)) > tol:
+		# TODO adjust SMA to get us closer to the desired regression
+		# sma = ...
+		tau = orbit_period(sma)
+		phi1 = earth_regression(tau)
+		phi2 = nodal_regression_sidereal(sma, inc, ecc)
+		phi = phi1 + phi2
+
