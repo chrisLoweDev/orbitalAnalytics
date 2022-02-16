@@ -1,17 +1,10 @@
 from math import pi, sqrt, cos, acos, radians
 from typing import Union
-
-
-MU = 398600000000000
-TAU_S = 86400  # Synodic day length (seconds)
-TAU_E = 86164  # Siderial day length (seconds)
-TAU_ES = 365.25 * TAU_S  # Solar period (seconds)
-J2 = 0.00108262668355  # J2 perturbation
-R_E = 6371000.8  # Earth radius, average (m)
+from source import config
 
 
 def orbit_period(sma):
-	return 2 * pi * sqrt(sma ** 3 / MU)
+	return 2 * pi * sqrt(sma ** 3 / config.MU)
 
 
 def nodal_regression(tau):
@@ -20,7 +13,7 @@ def nodal_regression(tau):
 	:param tau: orbit period (s)
 	:return:
 	"""
-	return 2 * pi * tau / TAU_ES
+	return 2 * pi * tau / config.TAU_ES
 
 
 def earth_regression(tau):
@@ -29,15 +22,16 @@ def earth_regression(tau):
 	:param tau: orbit period (s)
 	:return:
 	"""
-	return -2 * pi * tau / TAU_E
+	return -2 * pi * tau / config.TAU_E
 
 
 def nodal_regression_sidereal(sma, inc, ecc):
-	return (-3 * pi * J2 * R_E**2 * cos(inc)) / (sma**2 * ((1 - ecc ** 2) ** 2))
+	return (-3 * pi * config.J2 * config.R_E**2 * cos(inc)) / (sma**2 * ((1 - ecc ** 2)
+	                                                                     ** 2))
 
 
 def sun_sync_from_sma(
-		sma: Union[int, float] = R_E + 500000.,
+		sma: Union[int, float] = config.R_E + 500000.,
 		ecc: Union[int, float] = 0.
 ) -> float:
 	"""
@@ -48,13 +42,13 @@ def sun_sync_from_sma(
 	:param ecc: Eccentricity
 	:return: Inclination (radians)
 	"""
-	if sma < R_E:
+	if sma < config.R_E:
 		raise ValueError(
 			"Semi-major axis must be greater than the radius of the Earth"
 		)
 
-	if sma * (1-ecc) - R_E < 100000:
-		p = (sma * (1-ecc) - R_E) / 1000
+	if sma * (1-ecc) - config.R_E < 100000:
+		p = (sma * (1-ecc) - config.R_E) / 1000
 		string = "Orbit perigee must be greater than 100km, currently is %2d km" % p
 		raise ValueError(string)
 
@@ -64,7 +58,7 @@ def sun_sync_from_sma(
 	# Regression of the line of nodes (rad/orbit)
 	phi = nodal_regression(tau)
 
-	inc = acos(-phi * sma**2 * ((1 - ecc**2)**2) / (3 * pi * J2 * R_E**2))
+	inc = acos(-phi * sma**2 * ((1 - ecc**2)**2) / (3 * pi * config.J2 * config.R_E**2))
 
 	return inc
 
@@ -82,33 +76,33 @@ def sun_sync_from_inc(
 	:return: Semi-major axis (m)
 	"""
 
-	sma = (-3*sqrt(MU)*TAU_ES*J2*R_E**2*cos(inc)/(4*pi*((1-ecc**2)**2)))**(2/7)
+	sma = (-3*sqrt(config.MU)*config.TAU_ES*config.J2*config.R_E**2*cos(inc)/(4*pi*((1-ecc**2)**2)))**(2/7)
 
 	return sma
 
 
-def earth_sync_from_inc(
-		inc: Union[int, float] = radians(60.),
-		m: int = 1,
-		n: int = 16,
-		ecc: Union[int, float] = 0.
-) -> float:
-	"""
-	Return the Semi-major axis that results in a repeat ground track after an integer
-	number of orbits (n) and integer number of days (m)
-	:param inc:
-	:param m:
-	:param n:
-	:param ecc:
-	:return sma:
-	"""
-	phi = 1.
-	tol = 0.000001
-	while abs(phi + (m * 2 * pi / n)) > tol:
-		# TODO adjust SMA to get us closer to the desired regression
-		# sma = ...
-		tau = orbit_period(sma)
-		phi1 = earth_regression(tau)
-		phi2 = nodal_regression_sidereal(sma, inc, ecc)
-		phi = phi1 + phi2
+# def earth_sync_from_inc(
+# 		inc: Union[int, float] = radians(60.),
+# 		m: int = 1,
+# 		n: int = 16,
+# 		ecc: Union[int, float] = 0.
+# ) -> float:
+# 	"""
+# 	Return the Semi-major axis that results in a repeat ground track after an integer
+# 	number of orbits (n) and integer number of days (m)
+# 	:param inc:
+# 	:param m:
+# 	:param n:
+# 	:param ecc:
+# 	:return sma:
+# 	"""
+# 	phi = 1.
+# 	tol = 0.000001
+# 	while abs(phi + (m * 2 * pi / n)) > tol:
+# 		# TODO adjust SMA to get us closer to the desired regression
+# 		# sma = ...
+# 		tau = orbit_period(sma)
+# 		phi1 = earth_regression(tau)
+# 		phi2 = nodal_regression_sidereal(sma, inc, ecc)
+# 		phi = phi1 + phi2
 
