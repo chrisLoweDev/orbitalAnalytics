@@ -26,8 +26,7 @@ def earth_regression(tau):
 
 
 def nodal_regression_sidereal(sma, inc, ecc):
-	return (-3 * pi * config.J2 * config.R_E**2 * cos(inc)) / (sma**2 * ((1 - ecc ** 2)
-	                                                                     ** 2))
+	return (-3 * pi * config.J2 * config.R_E**2 * cos(inc)) / (sma**2 * ((1 - ecc**2)**2))
 
 
 def sun_sync_from_sma(
